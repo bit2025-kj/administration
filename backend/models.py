@@ -1,6 +1,8 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from database import Base
+from database import engine
+
 
 # ✅ UNE SEULE FOIS Subscription (avec extend_existing=True)
 class Subscription(Base):

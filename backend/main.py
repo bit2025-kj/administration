@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from . import crud, models
+import crud
+import models
 from database import engine, get_db
 import json
 from typing import List
@@ -16,6 +17,7 @@ import bcrypt
 from models import create_tables  # ✅ Import
 
 app = FastAPI(title="_ap_bar Backend - Admin")
+
 
 # ✅ SUPPRIMEZ DUPLICATA models.Base.metadata.create_all(bind=engine)
 @app.on_event("startup")
@@ -226,4 +228,4 @@ async def dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)  # ✅ Render OK
+    uvicorn.run("main:app", host="localhost", port=8000, reload=True)  # ✅ Render OK
