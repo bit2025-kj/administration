@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Session
-import models
+from backend import models
+from backend.models import Subscription, Admin, ValidationLog
+
 from datetime import datetime, timedelta
 import bcrypt
 from uuid import uuid4
-from models import Subscription, Admin, ValidationLog
+
 
 # ✅ SUBSCRIPTION CRUD (vos fonctions existantes)
 def get_subscription_by_device(db: Session, device_id: str):

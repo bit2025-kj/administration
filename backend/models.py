@@ -1,7 +1,12 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from database import Base
-from database import engine
+from backend.database import Base, engine
+
+# tes modèles ici…
+
+def create_tables():
+    Base.metadata.create_all(bind=engine)
+
 
 
 # ✅ UNE SEULE FOIS Subscription (avec extend_existing=True)

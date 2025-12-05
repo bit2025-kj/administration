@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import crud
-import models
-from database import engine, get_db
+
+from backend import crud
+from backend import models
+from backend.database import engine, get_db
+from backend.models import create_tables
+
 import json
 from typing import List
 import os
@@ -14,7 +17,7 @@ from fastapi.security import HTTPBearer
 import jwt
 from datetime import datetime, timedelta, timezone
 import bcrypt
-from models import create_tables  # ✅ Import
+ # ✅ Import
 
 app = FastAPI(title="_ap_bar Backend - Admin")
 
