@@ -1,8 +1,8 @@
 const API_URL = 'https://administration-otev.onrender.com';
 
-let ws = new WebSocket('wss://administration-otev.onrender.com/ws/admin?token=' + adminToken);
+let ws = null; // On initialise le WS plus tard
 let notificationCount = 0;
-let adminToken = localStorage.getItem('admin_token');
+let adminToken = localStorage.getItem('admin_token'); // Récupération du token avant tout
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
@@ -44,58 +44,54 @@ async function loadAdminInfo() {
 // 🔌 WEBSOCKET
 function connectWebSocket() {
     if (!adminToken) return;
-    
-    try {
-        ws = new WebSocket(API_URL.replace('http', 'ws') + '/ws/admin');
-        
-        ws.onopen = () => {
-            const status1 = document.getElementById('connectionStatus');
-            const status2 = document.getElementById('connectionStatus2');
-            if (status1) {
-                status1.textContent = '🟢 Connecté';
-                status1.className = 'status connected';
-            }
-            if (status2) status2.textContent = '🟢 OK';
-        };
-        
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'new_request') {
-                notificationCount++;
-                updateBadge();
-                showNotification(data);
-                if (currentTab === 'pending') loadPending();
-                playNotificationSound();
-            } else if (data.type === 'validated') {
-                if (currentTab === 'pending') loadPending();
-            }
-        };
-        
-        ws.onclose = () => {
-            const status1 = document.getElementById('connectionStatus');
-            const status2 = document.getElementById('connectionStatus2');
-            if (status1) {
-                status1.textContent = '🔴 Reconnexion...';
-                status1.className = 'status disconnected';
-            }
-            if (status2) status2.textContent = '🔴 Déconnecté';
-            setTimeout(connectWebSocket, 3000);
-        };
-    } catch (error) {
-        setTimeout(connectWebSocket, 5000);
-    }
+
+    ws = new WebSocket(`${API_URL.replace('https', 'wss')}/ws/admin?token=${adminToken}`);
+
+    ws.onopen = () => {
+        const status1 = document.getElementById('connectionStatus');
+        const status2 = document.getElementById('connectionStatus2');
+        if (status1) {
+            status1.textContent = '🟢 Connecté';
+            status1.className = 'status connected';
+        }
+        if (status2) status2.textContent = '🟢 OK';
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'new_request') {
+            notificationCount++;
+            updateBadge();
+            showNotification(data);
+            if (currentTab === 'pending') loadPending();
+            playNotificationSound();
+        } else if (data.type === 'validated') {
+            if (currentTab === 'pending') loadPending();
+        }
+    };
+
+    ws.onclose = () => {
+        const status1 = document.getElementById('connectionStatus');
+        const status2 = document.getElementById('connectionStatus2');
+        if (status1) {
+            status1.textContent = '🔴 Reconnexion...';
+            status1.className = 'status disconnected';
+        }
+        if (status2) status2.textContent = '🔴 Déconnecté';
+        setTimeout(connectWebSocket, 3000);
+    };
 }
 
-// 🔔 NOTIFICATION POPUP ✅ BUGS "de>" FIXÉS
+// 🔔 NOTIFICATION POPUP
 function showNotification(data) {
     const notification = document.createElement('div');
     notification.className = 'notification-popup';
     notification.innerHTML = `
         <h3>🆕 Nouvelle demande !</h3>
-        <p><strong>📱 Device:</strong> de>${data.device_id.slice(0,25)}${data.device_id.length > 25 ? '...' : ''}</code></p>
+        <p><strong>📱 Device:</strong> ${data.device_id.slice(0,25)}${data.device_id.length > 25 ? '...' : ''}</p>
         <p><strong>📞 Tel:</strong> ${data.phone}</p>
         <p><strong>📅 Mois:</strong> ${data.months}</p>
-        <p><strong>🔑 Clé:</strong> de>${data.key}</code></p>
+        <p><strong>🔑 Clé:</strong> ${data.key}</p>
         <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
             <button class="btn validate" onclick="validate('${data.device_id}'); this.closest('.notification-popup').remove();">
                 ✅ VALIDER
@@ -166,7 +162,7 @@ async function loadHistory() {
     }
 }
 
-// 🔀 ONGLETS ✅ FIX event.target
+// 🔀 ONGLETS
 function showTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.table-container').forEach(el => el.style.display = 'none');
