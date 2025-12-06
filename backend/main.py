@@ -22,6 +22,7 @@ import bcrypt
 app = FastAPI(title="_ap_bar Backend - Admin")
 
 
+
 # ✅ SUPPRIMEZ DUPLICATA models.Base.metadata.create_all(bind=engine)
 @app.on_event("startup")
 async def startup_event():
@@ -229,6 +230,38 @@ async def root():
 async def dashboard():
     return FileResponse(os.path.join(admin_path, "dashboard.html"))
 
+@app.websocket("/ws/admin")
+async def websocket_endpoint(websocket: WebSocket):
+    # Récupérer le token JWT envoyé en query param
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008)  # Fermeture si pas de token
+        return
+
+    # Vérifier le token
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        phone = payload.get("phone")
+        if not phone:
+            await websocket.close(code=1008)
+            return
+    except jwt.PyJWTError:
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="localhost", port=8000, reload=True)  # ✅ Render OK
+   uvicorn.run(
+    "main:app", 
+    host="0.0.0.0", 
+    port=int(os.environ.get("PORT", 10000)), 
+    reload=True
+)  # ✅ Render OK
