@@ -1,8 +1,8 @@
 const API_URL = 'https://administration-otev.onrender.com';
 
-let adminToken = localStorage.getItem('admin_token');
-let ws = null; // WebSocket sera créé plus tard
+let ws = new WebSocket('wss://administration-otev.onrender.com/ws/admin?token=' + adminToken);
 let notificationCount = 0;
+let adminToken = localStorage.getItem('admin_token');
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
@@ -41,12 +41,13 @@ async function loadAdminInfo() {
     }
 }
 
-// 🔌 WEBSOCKET
+// 🔌 WEBSOCKET ✅ FIX RENDER wss://
 function connectWebSocket() {
     if (!adminToken) return;
-
+    
     try {
-        ws = new WebSocket(`${API_URL.replace('https', 'wss')}/ws/admin?token=${adminToken}`);
+        // ✅ FIX : https → wss (Render SSL obligatoire)
+        ws = new WebSocket(API_URL.replace('https://', 'wss://') + '/ws/admin');
         
         ws.onopen = () => {
             const status1 = document.getElementById('connectionStatus');
@@ -86,16 +87,16 @@ function connectWebSocket() {
     }
 }
 
-// 🔔 NOTIFICATION POPUP
+// 🔔 NOTIFICATION POPUP ✅ BUGS "de>" FIXÉS
 function showNotification(data) {
     const notification = document.createElement('div');
     notification.className = 'notification-popup';
     notification.innerHTML = `
         <h3>🆕 Nouvelle demande !</h3>
-        <p><strong>📱 Device:</strong> de>${data.device_id.slice(0,25)}${data.device_id.length > 25 ? '...' : ''}</code></p>
+        <p><strong>📱 Device:</strong> ${data.device_id.slice(0,25)}${data.device_id.length > 25 ? '...' : ''}</p>
         <p><strong>📞 Tel:</strong> ${data.phone}</p>
         <p><strong>📅 Mois:</strong> ${data.months}</p>
-        <p><strong>🔑 Clé:</strong> de>${data.key}</code></p>
+        <p><strong>🔑 Clé:</strong> ${data.key}</p>
         <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
             <button class="btn validate" onclick="validate('${data.device_id}'); this.closest('.notification-popup').remove();">
                 ✅ VALIDER
@@ -166,7 +167,7 @@ async function loadHistory() {
     }
 }
 
-// 🔀 ONGLETS
+// 🔀 ONGLETS ✅ FIX event.target
 function showTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.table-container').forEach(el => el.style.display = 'none');
