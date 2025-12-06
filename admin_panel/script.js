@@ -1,8 +1,9 @@
 const API_URL = 'https://administration-otev.onrender.com';
 
+// ✅ Récupération du token avant tout
+const adminToken = localStorage.getItem('admin_token'); 
 let ws; // WebSocket sera créé plus tard
 let notificationCount = 0;
-let adminToken = localStorage.getItem('admin_token'); // ✅ Récupération avant toute utilisation
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
