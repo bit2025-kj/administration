@@ -1,5 +1,7 @@
+// script.js
 
-const API_URL = 'https://administration-otev.onrender.com';
+// 🌐 API dynamique sur le même domaine
+const API_URL = window.location.origin;
 
 let ws; // WebSocket sera créé plus tard
 let notificationCount = 0;
@@ -28,7 +30,6 @@ async function apiRequest(url, options = {}) {
     if (response.status === 401) {
         localStorage.removeItem('admin_token');
         adminToken = null;
-        // Relogin automatique si page admin
         if (window.location.pathname.includes('admin.html')) {
             showSuccess('🔐 Token expiré - Reconnexion...');
             setTimeout(() => window.location.href = '/login.html', 1500);
@@ -64,7 +65,8 @@ function connectWebSocket() {
     if (!adminToken) return;
 
     try {
-        const wsUrl = `${API_URL.replace('https', 'wss')}/ws/admin?token=${adminToken}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl = `${protocol}://${window.location.host}/ws/admin?token=${adminToken}`;
         ws = new WebSocket(wsUrl);
         
         ws.onopen = () => {
