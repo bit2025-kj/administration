@@ -17,18 +17,14 @@ from fastapi.security import HTTPBearer
 import jwt
 from datetime import datetime, timedelta, timezone
 import bcrypt
- # ✅ Import
 
 app = FastAPI(title="_ap_bar Backend - Admin")
 
-
-
-# ✅ SUPPRIMEZ DUPLICATA models.Base.metadata.create_all(bind=engine)
 @app.on_event("startup")
 async def startup_event():
     create_tables()  # ✅ UNE SEULE FOIS PostgreSQL
 
-SECRET_KEY = os.getenv("SECRET_KEY", "votre_secret_super_secret_ap_bar_2025")  # ✅ Render env
+SECRET_KEY = os.getenv("SECRET_KEY", "votre_secret_super_secret_ap_bar_2025")
 ALGORITHM = "HS256"
 security = HTTPBearer()
 
@@ -57,7 +53,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# ✅ MODÈLES Pydantic (OK)
+# ✅ MODÈLES Pydantic
 class SubscriptionRequest(BaseModel):
     device_id: str
     phone_number: str
@@ -75,7 +71,7 @@ class AdminSignup(BaseModel):
     phone: str
     password: str
 
-# ✅ JWT ADMIN (OK)
+# ✅ JWT ADMIN
 def get_current_admin(token: str = Depends(security)):
     try:
         payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
@@ -86,17 +82,7 @@ def get_current_admin(token: str = Depends(security)):
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Token invalide")
 
-# ✅ WebSocket (OK)
-@app.websocket("/ws/admin")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-# ✅ API MOBILE (OK)
+# ✅ API MOBILE
 @app.post("/request_subscription")
 async def create_subscription(request: SubscriptionRequest, db: Session = Depends(get_db)):
     existing = crud.get_subscription_by_device(db, request.device_id)
@@ -129,7 +115,7 @@ async def check_subscription(request: CheckSubscriptionRequest, db: Session = De
         "status": sub.status
     }
 
-# ✅ ADMIN ENDPOINTS (OK - gardez UNIQUEMENT la VERSION FINALE)
+# ✅ ADMIN ENDPOINTS
 @app.post("/admin/login")
 async def admin_login(login: AdminLogin, db: Session = Depends(get_db)):
     admin = crud.authenticate_admin(db, login.phone, login.password)
@@ -170,14 +156,13 @@ async def get_pending_requests(db: Session = Depends(get_db), current_admin: str
         for p in pending
     ]
 
-# ✅ HISTORIQUE (OK)
 @app.get("/admin/validations")
 async def get_validation_history(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     logs = crud.get_validation_history(db)
     return [
         {
             "id": log.id,
-            "device_id": log.device_id[:8] + "...",
+            "device_id": log.device_id,
             "client_phone": log.client_phone,
             "months": log.months,
             "key": log.activation_key,
@@ -187,7 +172,6 @@ async def get_validation_history(db: Session = Depends(get_db), current_admin: s
         for log in logs
     ]
 
-# ✅ VALIDATION avec LOG (OK - VERSION FINALE)
 @app.post("/admin/validate/{device_id}")
 async def validate_subscription(device_id: str, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     subscription = crud.get_pending_by_device(db, device_id)
@@ -217,10 +201,10 @@ async def clear_all_pending(db: Session = Depends(get_db), current_admin: str = 
     crud.clear_all_pending(db)
     return {"message": "Toutes les demandes supprimées"}
 
-# ✅ FRONTEND STATIC (FIX CHEMIN + PAS DE CONFLIT)
-admin_path = os.path.join(os.path.dirname(__file__), "../admin_panel")  # ✅ Depuis backend/
+# ✅ FRONTEND STATIC
+admin_path = os.path.join(os.path.dirname(__file__), "../admin_panel")
 
-app.mount("/static", StaticFiles(directory=admin_path), name="static")  # ✅ /static/ pas /
+app.mount("/static", StaticFiles(directory=admin_path), name="static")
 
 @app.get("/")
 async def root():
@@ -230,9 +214,10 @@ async def root():
 async def dashboard():
     return FileResponse(os.path.join(admin_path, "dashboard.html"))
 
+# ✅ WEBSOCKET UNIQUE (AVEC TOKEN VÉRIFICATION)
 @app.websocket("/ws/admin")
 async def websocket_endpoint(websocket: WebSocket):
-    # Récupérer le token JWT envoyé en query param
+    # Récupérer le token JWT envoyé en query param ?token=...
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008)  # Fermeture si pas de token
@@ -256,12 +241,11 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-
 if __name__ == "__main__":
     import uvicorn
-   uvicorn.run(
-    "main:app", 
-    host="0.0.0.0", 
-    port=int(os.environ.get("PORT", 10000)), 
-    reload=True
-)  # ✅ Render OK
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=int(os.environ.get("PORT", 10000)), 
+        reload=True
+    )
