@@ -1,8 +1,9 @@
+let adminToken = localStorage.getItem('admin_token');
 const API_URL = 'https://administration-otev.onrender.com';
 
 let ws = new WebSocket('wss://administration-otev.onrender.com/ws/admin?token=' + adminToken);
 let notificationCount = 0;
-let adminToken = localStorage.getItem('admin_token');
+
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
