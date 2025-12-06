@@ -18,6 +18,7 @@
             <div class="header-right">
                 <span id="adminInfo">👑 Chargement...</span>
                 <span class="status" id="connectionStatus">🔴 Déconnecté</span>
+                <span class="status" id="connectionStatus2">🔴 WebSocket</span> <!-- ✅ AJOUT -->
                 <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
             </div>
         </div>
@@ -28,31 +29,56 @@
             <div class="stats">
                 <div class="stat-card">
                     <h2 id="pendingCount">0</h2>
-                    <span>En attente</span>
+                    <span>📋 En attente</span> <!-- ✅ Émojis restaurés -->
                 </div>
                 <div class="stat-card">
                     <h2 id="totalCount">0</h2>
-                    <span>Total demandes</span>
+                    <span>📊 Total demandes</span>
                 </div>
             </div>
         </header>
         
-        <div class="controls">
-            <button class="btn refresh" onclick="loadPending()">🔄 Actualiser</button>
-            <button class="btn clear" onclick="clearAllPending()">🗑️ Vider en attente</button>
+        <!-- ✅ ONGLETS (requis par script.js) -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('pending', event)">📋 En attente</button>
+            <button class="tab-btn" onclick="showTab('history', event)">📈 Historique</button>
         </div>
         
-        <div class="table-container">
+        <!-- ✅ CONTROLES (ID requis) -->
+        <div class="controls" id="pendingControls"> <!-- ✅ ID ajouté -->
+            <button class="btn refresh" onclick="loadPending()">🔄 Actualiser</button>
+            <button class="btn clear" onclick="clearAllPending()">🗑️ Vider tout</button> <!-- ✅ Texte corrigé -->
+        </div>
+        
+        <!-- ✅ TABLEAU EN ATTENTE -->
+        <div id="pendingTab" class="table-container"> <!-- ✅ ID ajouté -->
             <table id="pendingTable">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th>ID court</th> <!-- ✅ Restauré -->
                         <th>Device ID</th>
-                        <th>Téléphone</th>
-                        <th>Mois</th>
-                        <th>Clé Activation</th>
-                        <th>Date</th>
-                        <th>Action</th>
+                        <th>📱 Téléphone</th> <!-- ✅ Émoji -->
+                        <th>📅 Mois</th>
+                        <th>🔑 Clé</th> <!-- ✅ Simplifié -->
+                        <th>🕒 Date</th>
+                        <th>✅ Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <!-- ✅ TABLEAU HISTORIQUE (requis par script.js) -->
+        <div id="historyTab" class="table-container" style="display: none;"> <!-- ✅ AJOUT COMPLET -->
+            <table id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>📱 Client</th>
+                        <th>📅 Mois</th>
+                        <th>🔑 Clé</th>
+                        <th>👑 Admin</th>
+                        <th>📊 Date</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
