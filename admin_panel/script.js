@@ -1,9 +1,8 @@
-let adminToken = localStorage.getItem('admin_token');
 const API_URL = 'https://administration-otev.onrender.com';
 
-let ws = new WebSocket('wss://administration-otev.onrender.com/ws/admin?token=' + adminToken);
+let adminToken = localStorage.getItem('admin_token'); // ✅ DÉCLARÉ EN PREMIER
+let ws; // WebSocket sera créé plus tard
 let notificationCount = 0;
-
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
@@ -42,13 +41,12 @@ async function loadAdminInfo() {
     }
 }
 
-// 🔌 WEBSOCKET ✅ FIX RENDER wss://
+// 🔌 WEBSOCKET ✅ FIX Render wss://
 function connectWebSocket() {
     if (!adminToken) return;
-    
+
     try {
-        // ✅ FIX : https → wss (Render SSL obligatoire)
-        ws = new WebSocket(API_URL.replace('https://', 'wss://') + '/ws/admin');
+        ws = new WebSocket(`${API_URL.replace('https', 'wss')}/ws/admin?token=${adminToken}`);
         
         ws.onopen = () => {
             const status1 = document.getElementById('connectionStatus');
@@ -88,7 +86,7 @@ function connectWebSocket() {
     }
 }
 
-// 🔔 NOTIFICATION POPUP ✅ BUGS "de>" FIXÉS
+// 🔔 NOTIFICATION POPUP
 function showNotification(data) {
     const notification = document.createElement('div');
     notification.className = 'notification-popup';
@@ -168,7 +166,7 @@ async function loadHistory() {
     }
 }
 
-// 🔀 ONGLETS ✅ FIX event.target
+// 🔀 ONGLETS
 function showTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.table-container').forEach(el => el.style.display = 'none');
