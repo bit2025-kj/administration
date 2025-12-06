@@ -1,5 +1,6 @@
-const API_URL = 'http://127.0.0.1:8000';
-let ws = null;
+const API_URL = 'https://administration-otev.onrender.com';
+
+let ws = new WebSocket('wss://administration-otev.onrender.com/ws/admin?token=' + adminToken);
 let notificationCount = 0;
 let adminToken = localStorage.getItem('admin_token');
 let currentTab = 'pending';
