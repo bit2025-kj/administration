@@ -1,8 +1,8 @@
 const API_URL = 'https://administration-otev.onrender.com';
 
-let adminToken = localStorage.getItem('admin_token'); // ✅ DÉCLARÉ EN PREMIER
 let ws; // WebSocket sera créé plus tard
 let notificationCount = 0;
+let adminToken = localStorage.getItem('admin_token'); // ✅ Récupération avant utilisation
 let currentTab = 'pending';
 
 // 🔐 API REQUEST avec JWT
@@ -41,10 +41,10 @@ async function loadAdminInfo() {
     }
 }
 
-// 🔌 WEBSOCKET ✅ FIX Render wss://
+// 🔌 WEBSOCKET ✅ Fix adminToken initialization
 function connectWebSocket() {
     if (!adminToken) return;
-
+    
     try {
         ws = new WebSocket(`${API_URL.replace('https', 'wss')}/ws/admin?token=${adminToken}`);
         
@@ -167,7 +167,7 @@ async function loadHistory() {
 }
 
 // 🔀 ONGLETS
-function showTab(tab) {
+function showTab(tab, event) {
     currentTab = tab;
     document.querySelectorAll('.table-container').forEach(el => el.style.display = 'none');
     const targetTab = document.getElementById(tab + 'Tab');
