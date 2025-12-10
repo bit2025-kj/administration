@@ -125,3 +125,12 @@ def get_validations_by_admin(db: Session, admin_phone: str):
     return db.query(models.ValidationLog).filter(
         models.ValidationLog.admin_id == admin.id
     ).order_by(models.ValidationLog.validated_at.desc()).all()
+def create_client(db: Session, phone: str):
+    client = Client(phone=phone)
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+def get_client_validations(db: Session, client_id: int):
+    return db.query(ValidationLog).filter(ValidationLog.client_id == client_id).order_by(ValidationLog.created_at.desc()).all()
