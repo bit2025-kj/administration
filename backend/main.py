@@ -4,158 +4,89 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlalchemy.sql import func
+from datetime import timedelta
 
+# ✅ IMPORTS CORRIGÉS
 from backend import crud
 from backend import models
 from backend.database import engine, get_db
-from backend.models import create_tables
+from backend.models import create_tables, Client, ValidationLog, Subscription, Admin
 
-import json
-from typing import List
-import os
-from fastapi.security import HTTPBearer
-import jwt
-from datetime import datetime, timedelta, timezone
-import bcrypt
+# ... (votre code existant jusqu'aux modèles Pydantic OK)
 
-app = FastAPI(title="_ap_bar Backend - Admin")
-
-@app.on_event("startup")
-async def startup_event():
-    create_tables()  # ✅ UNE SEULE FOIS PostgreSQL
-
-SECRET_KEY = os.getenv("SECRET_KEY", "votre_secret_super_secret_ap_bar_2025")
-ALGORITHM = "HS256"
-security = HTTPBearer()
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: str):
-        for conn in self.active_connections:
-            await conn.send_text(message)
-
-manager = ConnectionManager()
-
-app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"]
-)
-
-# ✅ MODÈLES Pydantic
-class SubscriptionRequest(BaseModel):
-    device_id: str
-    phone_number: str
-    months: int
-
-class CheckSubscriptionRequest(BaseModel):
-    device_id: str
-
-class AdminLogin(BaseModel):
-    phone: str
-    password: str
-
-class AdminSignup(BaseModel):
-    name: str
-    phone: str
-    password: str
-
-# ✅ JWT ADMIN
-def get_current_admin(token: str = Depends(security)):
-    try:
-        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        phone = payload.get("phone")
-        if phone is None:
-            raise HTTPException(status_code=401, detail="Token invalide")
-        return phone
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Token invalide")
-
-# ✅ API MOBILE
-@app.post("/request_subscription")
-async def create_subscription(request: SubscriptionRequest, db: Session = Depends(get_db)):
-    existing = crud.get_subscription_by_device(db, request.device_id)
-    if existing and existing.status == "pending":
-        return {"activation_key": existing.activation_key, "status": "pending"}
+# ✅ ENDPOINT VALIDATE CORRIGÉ
+@app.post("/admin/validate/{device_id}")
+async def validate_subscription_endpoint(
+    device_id: str, 
+    current_admin: str = Depends(get_current_admin),  # ✅ JWT
+    db: Session = Depends(get_db)
+):
+    """Validation complète : Client + Subscription + Log historique"""
+    print(f"🔧 Admin {current_admin} valide: {device_id}")
     
-    sub = crud.create_subscription(db, request.device_id, request.phone_number, request.months)
-    await manager.broadcast(json.dumps({
-        "type": "new_request",
-        "device_id": sub.device_id,
-        "phone": sub.phone_number,
-        "key": sub.activation_key,
-        "months": sub.months,
-        "timestamp": sub.created.isoformat()
-    }))
-    print(f"🆕 NOUVELLE DEMANDE: {request.device_id} | Clé: {sub.activation_key}")
-    return {"activation_key": sub.activation_key, "status": "pending"}
+    # ✅ Utilise CRUD corrigé
+    admin = crud.get_admin_by_phone(db, current_admin)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Admin non trouvé")
+    
+    success = crud.validate_subscription(db, device_id, admin.id, admin.name)
+    
+    if success:
+        # ✅ Broadcast à TOUS admins
+        await manager.broadcast(json.dumps({
+            "type": "validated",
+            "device_id": device_id,
+            "admin": admin.name,
+            "timestamp": func.now()
+        }))
+        print(f"✅ VALIDÉ + LOG: {device_id} par {admin.name}")
+        return {"status": "validated", "message": "Validation réussie"}
+    raise HTTPException(status_code=400, detail="Abonnement non trouvé ou déjà validé")
 
-@app.post("/check_subscription")
-async def check_subscription(request: CheckSubscriptionRequest, db: Session = Depends(get_db)):
-    print(f"🔍 Flutter check pour: {request.device_id}")
-    sub = crud.get_subscription_by_device(db, request.device_id)
-    if not sub:
-        print(f"❌ Device {request.device_id} non trouvé")
-        return {"error": "Device non trouvé"}
-    print(f"📊 Status actuel: {sub.status}")
+# ✅ NOUVEAU : Liste TOUS clients
+@app.get("/admin/clients")
+async def get_all_clients(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
+    """Liste tous clients + device_id"""
+    clients = db.query(Client).all()
     return {
-        "activation_key": sub.activation_key,
-        "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
-        "status": sub.status
+        "clients": [
+            {
+                "id": c.id,
+                "name": c.name or f"Client {c.phone}",
+                "phone": c.phone,
+                "device_id": c.device_id
+            }
+            for c in clients
+        ]
     }
 
-# ✅ ADMIN ENDPOINTS
-@app.post("/admin/login")
-async def admin_login(login: AdminLogin, db: Session = Depends(get_db)):
-    admin = crud.authenticate_admin(db, login.phone, login.password)
-    if not admin:
-        raise HTTPException(status_code=401, detail="Numéro ou mot de passe incorrect")
-    
-    token = jwt.encode({
-        "phone": admin.phone,
-        "name": admin.name,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=24)
-    }, SECRET_KEY, algorithm=ALGORITHM)
-    
-    return {"token": token, "name": admin.name, "phone": admin.phone}
+# ✅ NOUVEAU : Historique PAR CLIENT/DEVICE
+@app.get("/admin/client/{device_id}/history")
+async def get_client_history_endpoint(
+    device_id: str, 
+    db: Session = Depends(get_db), 
+    current_admin: str = Depends(get_current_admin)
+):
+    """Historique complet d'un client par device_id"""
+    history = crud.get_client_history(db, device_id)
+    return {
+        "device_id": device_id,
+        "history": [
+            {
+                "id": log.id,
+                "client_phone": log.client_phone,
+                "admin_name": log.admin_name,
+                "months": log.months,
+                "activation_key": log.activation_key,
+                "expires_at": log.expires_at.isoformat() if log.expires_at else None,
+                "validated_at": log.validated_at.isoformat()
+            }
+            for log in history
+        ]
+    }
 
-@app.post("/admin/signup")
-async def admin_signup(signup: AdminSignup, db: Session = Depends(get_db)):
-    existing = crud.get_admin_by_phone(db, signup.phone)
-    if existing:
-        raise HTTPException(status_code=400, detail="Numéro déjà utilisé")
-    
-    total_admins = db.query(models.Admin).count()
-    if total_admins >= 6:
-        raise HTTPException(status_code=403, detail="⚠️ Limite de 6 administrateurs atteinte")
-    
-    admin = crud.create_admin(db, signup.name, signup.phone, signup.password)
-    return {"message": f"✅ Compte créé: {admin.name}", "phone": admin.phone}
-
-@app.get("/admin/me")
-async def get_admin_info(current_admin: str = Depends(get_current_admin), db: Session = Depends(get_db)):
-    admin = crud.get_admin_by_phone(db, current_admin)
-    return {"name": admin.name, "phone": admin.phone}
-
-@app.get("/admin/pending")
-async def get_pending_requests(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
-    pending = crud.get_pending_requests(db)
-    return [
-        {"device_id": p.device_id, "phone": p.phone_number, "key": p.activation_key, "months": p.months, "created": p.created.isoformat()}
-        for p in pending
-    ]
-
+# ✅ CORRIGEZ votre endpoint /admin/validations existant
 @app.get("/admin/validations")
 async def get_validation_history(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     logs = crud.get_validation_history(db)
@@ -172,90 +103,5 @@ async def get_validation_history(db: Session = Depends(get_db), current_admin: s
         for log in logs
     ]
 
-@app.post("/admin/validate/{device_id}")
-async def validate_subscription(db: Session, device_id: str, admin_name: str):
-    sub = get_subscription_by_device(db, device_id)
-    if sub and sub.status == "pending":
-        # Créer client si pas existant
-        client = db.query(Client).filter(Client.device_id == device_id).first()
-        if not client:
-            client = Client(device_id=device_id, phone=sub.phone_number)
-            db.add(client)
-            db.commit()
-        
-        sub.status = "validated"
-        sub.expires_at = func.now() + timedelta(days=30 * sub.months)
-        db.commit()
-        
-        # Logger validation
-        log = ValidationLog(
-            client_id=client.id,
-            admin_name=admin_name,
-            status="validated",
-            months=sub.months,
-            expires_at=sub.expires_at
-        )
-        db.add(log)
-        db.commit()
-        return True
-
-
-@app.post("/admin/clear")
-async def clear_all_pending(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
-    crud.clear_all_pending(db)
-    return {"message": "Toutes les demandes supprimées"}
-
-# ✅ FRONTEND STATIC
-admin_path = os.path.join(os.path.dirname(__file__), "../admin_panel")
-
-app.mount("/static", StaticFiles(directory=admin_path), name="static")
-
-@app.get("/")
-async def root():
-    return FileResponse(os.path.join(admin_path, "login.html"))
-
-@app.get("/dashboard.html")
-async def dashboard():
-    return FileResponse(os.path.join(admin_path, "dashboard.html"))
-
-
-@app.get("/admin/client/{client_id}/history")
-async def get_client_history(client_id: int, db: Session = Depends(get_db)):
-    validations = get_client_validations(db, client_id)
-    return {"validations": [v.__dict__ for v in validations]}
-
-# ✅ WEBSOCKET UNIQUE (AVEC TOKEN VÉRIFICATION)
-@app.websocket("/ws/admin")
-async def websocket_endpoint(websocket: WebSocket):
-    # Récupérer le token JWT envoyé en query param ?token=...
-    token = websocket.query_params.get("token")
-    if not token:
-        await websocket.close(code=1008)  # Fermeture si pas de token
-        return
-
-    # Vérifier le token
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        phone = payload.get("phone")
-        if not phone:
-            await websocket.close(code=1008)
-            return
-    except jwt.PyJWTError:
-        await websocket.close(code=1008)
-        return
-
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=int(os.environ.get("PORT", 10000)), 
-        reload=True
-    )
+# ✅ SUPPRIMEZ l'ancien endpoint cassé /admin/client/{client_id}/history
+# Gardez TOUT le reste (WebSocket, static, etc.) IDENTIQUE ✅
