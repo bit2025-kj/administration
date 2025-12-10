@@ -1,23 +1,20 @@
-// script.js
+// script.js COMPLET - Admin Dashboard avec Profils Clients
 
-// 🌐 API dynamique sur le même domaine
+// 🌐 API dynamique
 const API_URL = window.location.origin;
+let ws, notificationCount = 0, adminToken = localStorage.getItem('admin_token');
+let currentTab = 'pending', selectedClientId = null;
 
-let ws; // WebSocket sera créé plus tard
-let notificationCount = 0;
-let adminToken = localStorage.getItem('admin_token'); // ✅ Récupération initiale
-let currentTab = 'pending';
-
-// 🔄 SYNCHRONISER TOKEN DYNAMIQUEMENT
+// 🔄 SYNCHRONISER TOKEN
 function syncToken() {
     adminToken = localStorage.getItem('admin_token');
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close(); // Force reconnexion WS avec nouveau token
+        ws.close();
         setTimeout(connectWebSocket, 1000);
     }
 }
 
-// 🔐 API REQUEST avec JWT AMÉLIORÉ
+// 🔐 API REQUEST sécurisée
 async function apiRequest(url, options = {}) {
     const headers = {
         'Content-Type': 'application/json',
@@ -29,91 +26,60 @@ async function apiRequest(url, options = {}) {
     
     if (response.status === 401) {
         localStorage.removeItem('admin_token');
-        adminToken = null;
-        if (window.location.pathname.includes('admin.html')) {
-            showSuccess('🔐 Token expiré - Reconnexion...');
-            setTimeout(() => window.location.href = '/login.html', 1500);
-        }
+        window.location.href = '/login.html';
         throw new Error('Unauthorized');
     }
-    
     return response;
 }
 
 // 🚪 LOGOUT
 function logout() {
     localStorage.removeItem('admin_token');
-    adminToken = null;
     if (ws) ws.close();
     window.location.href = '/login.html';
 }
 
-// 👑 CHARGE INFOS ADMIN
+// 👑 CHARGE ADMIN
 async function loadAdminInfo() {
     try {
-        const response = await apiRequest(`${API_URL}/admin/me`);
-        const data = await response.json();
+        const data = await apiRequest(`${API_URL}/admin/me`).then(r => r.json());
         document.getElementById('adminInfo').textContent = `👑 ${data.name} (${data.phone})`;
     } catch (error) {
         document.getElementById('adminInfo').textContent = '👑 Erreur';
-        console.error('loadAdminInfo error:', error);
     }
 }
 
-// 🔌 WEBSOCKET ROBUSTE
+// 🔌 WEBSOCKET
 function connectWebSocket() {
     if (!adminToken) return;
-
-    try {
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const wsUrl = `${protocol}://${window.location.host}/ws/admin?token=${adminToken}`;
-        ws = new WebSocket(wsUrl);
-        
-        ws.onopen = () => {
-            const status1 = document.getElementById('connectionStatus');
-            const status2 = document.getElementById('connectionStatus2');
-            if (status1) {
-                status1.textContent = '🟢 Connecté';
-                status1.className = 'status connected';
-            }
-            if (status2) status2.textContent = '🟢 OK';
-        };
-        
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'new_request') {
-                notificationCount++;
-                updateBadge();
-                showNotification(data);
-                if (currentTab === 'pending') loadPending();
-                playNotificationSound();
-            } else if (data.type === 'validated') {
-                if (currentTab === 'pending') loadPending();
-            }
-        };
-        
-        ws.onclose = () => {
-            const status1 = document.getElementById('connectionStatus');
-            const status2 = document.getElementById('connectionStatus2');
-            if (status1) {
-                status1.textContent = '🔴 Reconnexion...';
-                status1.className = 'status disconnected';
-            }
-            if (status2) status2.textContent = '🔴 Déconnecté';
-            setTimeout(connectWebSocket, 3000);
-        };
-        
-        ws.onerror = (error) => {
-            console.error('WS Error:', error);
-            setTimeout(connectWebSocket, 5000);
-        };
-    } catch (error) {
-        console.error('WS Connection failed:', error);
-        setTimeout(connectWebSocket, 5000);
-    }
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}/ws/admin?token=${adminToken}`;
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+        document.getElementById('connectionStatus').textContent = '🟢 Connecté';
+        document.getElementById('connectionStatus2').textContent = '🟢 OK';
+    };
+    
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'new_request') {
+            notificationCount++;
+            updateBadge();
+            showNotification(data);
+            if (currentTab === 'pending') loadPending();
+            playNotificationSound();
+        }
+    };
+    
+    ws.onclose = () => {
+        document.getElementById('connectionStatus').textContent = '🔴 Reconnexion...';
+        document.getElementById('connectionStatus2').textContent = '🔴 Déconnecté';
+        setTimeout(connectWebSocket, 3000);
+    };
 }
 
-// 🔔 NOTIFICATION POPUP
+// 🔔 NOTIFICATION
 function showNotification(data) {
     const notification = document.createElement('div');
     notification.className = 'notification-popup';
@@ -123,34 +89,24 @@ function showNotification(data) {
         <p><strong>📞 Tel:</strong> ${data.phone}</p>
         <p><strong>📅 Mois:</strong> ${data.months}</p>
         <p><strong>🔑 Clé:</strong> ${data.key}</p>
-        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-            <button class="btn validate" onclick="validate('${data.device_id}'); this.closest('.notification-popup').remove();">
-                ✅ VALIDER
-            </button>
-            <button class="btn" onclick="this.closest('.notification-popup').remove();" style="background: rgba(255,255,255,0.2);">
-                ⏭️ Plus tard
-            </button>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn validate" onclick="validate('${data.device_id}'); this.closest('.notification-popup').remove();">✅ VALIDER</button>
+            <button class="btn" onclick="this.closest('.notification-popup').remove();" style="background: rgba(255,255,255,0.2);">⏭️ Plus tard</button>
         </div>
     `;
     document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) notification.remove();
-    }, 20000);
+    setTimeout(() => notification.remove(), 20000);
 }
 
-// 📋 CHARGE TABLEAU EN ATTENTE
+// 📋 EN ATTENTE
 async function loadPending() {
     try {
-        const response = await apiRequest(`${API_URL}/admin/pending`);
-        const pending = await response.json();
-        
+        const pending = await apiRequest(`${API_URL}/admin/pending`).then(r => r.json());
         document.getElementById('pendingCount').textContent = pending.length;
         document.getElementById('totalCount').textContent = pending.length;
         
         const tbody = document.querySelector('#pendingTable tbody');
-        if (tbody) tbody.innerHTML = '';
-        
+        tbody.innerHTML = '';
         pending.forEach(item => {
             const row = tbody.insertRow();
             row.innerHTML = `
@@ -164,23 +120,20 @@ async function loadPending() {
             `;
         });
     } catch (error) {
-        console.error('Erreur loadPending:', error);
+        console.error('loadPending:', error);
     }
 }
 
-// ✅ HISTORIQUE VALIDATIONS
+// 📈 HISTORIQUE GLOBAL
 async function loadHistory() {
     try {
-        const response = await apiRequest(`${API_URL}/admin/validations`);
-        const history = await response.json();
-        
+        const history = await apiRequest(`${API_URL}/admin/validations`).then(r => r.json());
         const tbody = document.querySelector('#historyTable tbody');
-        if (tbody) tbody.innerHTML = '';
-        
+        tbody.innerHTML = '';
         history.forEach(item => {
             const row = tbody.insertRow();
             row.innerHTML = `
-                <td>${item.device_id}</td>
+                <td>${item.id}</td>
                 <td>${item.client_phone}</td>
                 <td>${item.months}</td>
                 <td><span class="key">${item.key}</span></td>
@@ -189,25 +142,75 @@ async function loadHistory() {
             `;
         });
     } catch (error) {
-        console.error('Erreur historique:', error);
+        console.error('loadHistory:', error);
     }
 }
 
-// 🔀 ONGLETS
-function showTab(tab, event) {
-    currentTab = tab;
-    document.querySelectorAll('.table-container').forEach(el => el.style.display = 'none');
-    const targetTab = document.getElementById(tab + 'Tab');
-    if (targetTab) targetTab.style.display = 'block';
-    
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    if (event && event.target) event.target.classList.add('active');
-    
-    if (tab === 'pending') loadPending();
-    else if (tab === 'history') loadHistory();
+// ✅ 👥 PROFILS CLIENTS - LISTE
+async function loadClients() {
+    try {
+        const data = await apiRequest(`${API_URL}/admin/clients`).then(r => r.json());
+        document.getElementById('clientsCount').textContent = data.clients.length;
+        document.getElementById('clientsList').innerHTML = 
+            data.clients.map(c => `
+                <div class="client-card" onclick="loadClientHistory('${c.device_id}')">
+                    <h4>${c.name}</h4>
+                    <p>📱 ${c.phone}</p>
+                    <p><small>🔧 ${c.device_id.slice(-8)}</small></p>
+                </div>
+            `).join('');
+        document.getElementById('clientDetail').style.display = 'none';
+    } catch (error) {
+        console.error('loadClients:', error);
+        document.getElementById('clientsList').innerHTML = '<p>Erreur chargement clients</p>';
+    }
 }
 
-// ✅ VALIDER ABONNEMENT
+// ✅ HISTORIQUE CLIENT SPÉCIFIQUE
+async function loadClientHistory(deviceId) {
+    try {
+        const data = await apiRequest(`${API_URL}/admin/client/${deviceId}/history`).then(r => r.json());
+        document.getElementById('clientDetail').style.display = 'block';
+        document.getElementById('clientTitle').textContent = `📋 Historique ${deviceId.slice(-8)}`;
+        document.getElementById('clientHistory').innerHTML = 
+            data.history.length ? data.history.map(v => `
+                <div class="validation-item">
+                    <div>
+                        <strong>👤 ${v.admin_name}</strong> 
+                        <span style="color: #666;">${v.months} mois</span>
+                    </div>
+                    <div style="font-size: 0.9em; color: #888;">
+                        📅 ${new Date(v.validated_at).toLocaleDateString('fr-FR')}
+                        <br>🔑 ${v.activation_key}
+                    </div>
+                </div>
+            `).join('') : '<p>Aucune validation pour ce client</p>';
+    } catch (error) {
+        console.error('loadClientHistory:', error);
+    }
+}
+
+// 🔀 ONGLETS AMÉLIORÉS
+function showTab(tabName, event) {
+    currentTab = tabName;
+    
+    // Masquer tous
+    document.querySelectorAll('.table-container').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Activer cible
+    event.target.classList.add('active');
+    document.getElementById(tabName + 'Tab').classList.add('active');
+    
+    // Charger contenu
+    switch(tabName) {
+        case 'pending': loadPending(); break;
+        case 'history': loadHistory(); break;
+        case 'clients': loadClients(); break;
+    }
+}
+
+// ✅ VALIDER
 async function validate(deviceId) {
     if (confirm(`Valider abonnement ${deviceId.slice(0,25)}... ?`)) {
         try {
@@ -216,7 +219,7 @@ async function validate(deviceId) {
                 notificationCount = Math.max(0, notificationCount - 1);
                 updateBadge();
                 if (currentTab === 'pending') loadPending();
-                showSuccess('✅ Abonnement validé et LOGGÉ !');
+                showSuccess('✅ Abonnement validé + LOGGÉ !');
             }
         } catch (error) {
             alert('❌ Erreur: ' + error.message);
@@ -224,26 +227,24 @@ async function validate(deviceId) {
     }
 }
 
-// 🗑️ VIDER TOUT
+// 🗑️ VIDER
 async function clearAllPending() {
-    if (confirm('🗑️ Vider TOUTES les demandes en attente ?')) {
+    if (confirm('🗑️ Vider TOUTES les demandes ?')) {
         try {
             await apiRequest(`${API_URL}/admin/clear`, { method: 'POST' });
             loadPending();
-            showSuccess('✅ Base vidée !');
+            showSuccess('✅ Demandes vidées !');
         } catch (error) {
             alert('❌ Erreur: ' + error.message);
         }
     }
 }
 
-// 🔔 BADGE NOTIFICATIONS
+// 🔔 UTILS
 function updateBadge() {
-    const badge = document.getElementById('notificationBadge');
-    if (badge) badge.textContent = notificationCount;
+    document.getElementById('notificationBadge').textContent = notificationCount;
 }
 
-// 🔊 SON NOTIFICATION
 function playNotificationSound() {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
@@ -254,11 +255,10 @@ function playNotificationSound() {
     oscillator.type = 'sine';
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    oscillator.start(audioContext.currentTime);
+    oscillator.start();
     oscillator.stop(audioContext.currentTime + 0.5);
 }
 
-// 🎉 MESSAGE SUCCÈS
 function showSuccess(message) {
     const snackbar = document.createElement('div');
     snackbar.style.cssText = `
@@ -271,24 +271,22 @@ function showSuccess(message) {
     setTimeout(() => snackbar.remove(), 3000);
 }
 
-// 🚀 INITIALISATION COMPLÈTE
+// 🚀 INITIALISATION
 document.addEventListener('DOMContentLoaded', async () => {
-    syncToken(); // ✅ Synchronise token au démarrage
-    
     if (!adminToken) {
         window.location.href = '/login.html';
         return;
     }
     
+    syncToken();
     await loadAdminInfo();
     connectWebSocket();
     loadPending();
+    
     setInterval(() => {
         if (currentTab === 'pending') loadPending();
     }, 5000);
-    updateBadge();
     
-    // Écoute les changements de storage (autre onglet)
     window.addEventListener('storage', (e) => {
         if (e.key === 'admin_token') syncToken();
     });
