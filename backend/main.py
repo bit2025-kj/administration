@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta, timezone
 from fastapi.security import HTTPBearer
-import jwt, os, json
+import jwt, os, json, bcrypt
 from typing import List
 
 from backend import crud
@@ -15,25 +15,35 @@ from backend import models
 from backend.database import engine, get_db
 from backend.models import create_tables, Client, ValidationLog, Subscription, Admin
 
-# ✅ APP + MIDDLEWARE
 app = FastAPI(title="_ap_bar Backend - Admin")
 
 @app.on_event("startup")
 async def startup():
     create_tables()
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
-# ✅ JWT + WEBSOCKET
+# JWT + WEBSOCKET
 SECRET_KEY = os.getenv("SECRET_KEY", "votre_secret_super_secret_ap_bar_2025")
 ALGORITHM = "HS256"
 security = HTTPBearer()
 
 class ConnectionManager:
-    def __init__(self): self.active_connections: List[WebSocket] = []
-    async def connect(self, websocket: WebSocket): await websocket.accept(); self.active_connections.append(websocket)
-    def disconnect(self, websocket: WebSocket): self.active_connections.remove(websocket)
-    async def broadcast(self, message: str): for conn in self.active_connections: await conn.send_text(message)
+    def __init__(self): 
+        self.active_connections: List[WebSocket] = []
+    async def connect(self, websocket: WebSocket): 
+        await websocket.accept(); self.active_connections.append(websocket)
+    def disconnect(self, websocket: WebSocket): 
+        self.active_connections.remove(websocket)
+    async def broadcast(self, message: str): 
+        for conn in self.active_connections: 
+            await conn.send_text(message)
 
 manager = ConnectionManager()
 
@@ -43,19 +53,29 @@ def get_current_admin(token: str = Depends(security)):
         phone = payload.get("phone")
         if phone is None: raise HTTPException(status_code=401, detail="Token invalide")
         return phone
-    except jwt.PyJWTError: raise HTTPException(status_code=401, detail="Token invalide")
+    except jwt.PyJWTError: 
+        raise HTTPException(status_code=401, detail="Token invalide")
 
-# ✅ MODÈLES + CLIENT_NAME
+# ✅ MODÈLES COMPLETS
 class SubscriptionRequest(BaseModel):
     device_id: str
-    client_name: str          # ✅ NOUVEAU
+    client_name: str          # ✅ NOM CLIENT
     phone_number: str
     months: int
 
 class CheckSubscriptionRequest(BaseModel):
     device_id: str
 
-# ✅ MOBILE API
+class AdminLogin(BaseModel):      # ✅ MANQUANT
+    phone: str
+    password: str
+
+class AdminSignup(BaseModel):     # ✅ MANQUANT
+    name: str
+    phone: str
+    password: str
+
+# MOBILE API
 @app.post("/request_subscription")
 async def create_subscription(request: SubscriptionRequest, db: Session = Depends(get_db)):
     existing = crud.get_subscription_by_device(db, request.device_id)
@@ -66,7 +86,7 @@ async def create_subscription(request: SubscriptionRequest, db: Session = Depend
     await manager.broadcast(json.dumps({
         "type": "new_request",
         "device_id": sub.device_id,
-        "client_name": request.client_name,  # ✅ NOM !
+        "client_name": request.client_name,
         "phone": sub.phone_number,
         "key": sub.activation_key,
         "months": sub.months,
@@ -77,20 +97,57 @@ async def create_subscription(request: SubscriptionRequest, db: Session = Depend
 
 @app.post("/check_subscription")
 async def check_subscription(request: CheckSubscriptionRequest, db: Session = Depends(get_db)):
+    print(f"🔍 Flutter check pour: {request.device_id}")
     sub = crud.get_subscription_by_device(db, request.device_id)
-    if not sub: return {"error": "Device non trouvé"}
+    if not sub: 
+        print(f"❌ Device {request.device_id} non trouvé")
+        return {"error": "Device non trouvé"}
+    print(f"📊 Status actuel: {sub.status}")
     return {
         "activation_key": sub.activation_key,
         "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
         "status": sub.status
     }
 
-# ✅ ADMIN API (votre code existant)
+# ✅ ADMIN API COMPLÈTE
 @app.post("/admin/login")
 async def admin_login(login: AdminLogin, db: Session = Depends(get_db)):
-    # ... votre code login existant
+    admin = crud.authenticate_admin(db, login.phone, login.password)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Numéro ou mot de passe incorrect")
+    
+    token = jwt.encode({
+        "phone": admin.phone,
+        "name": admin.name,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=24)
+    }, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {"token": token, "name": admin.name, "phone": admin.phone}
 
-# ✅ VOS NOUVEAUX ENDPOINTS (CORRIGÉS)
+@app.post("/admin/signup")
+async def admin_signup(signup: AdminSignup, db: Session = Depends(get_db)):
+    existing = crud.get_admin_by_phone(db, signup.phone)
+    if existing:
+        raise HTTPException(status_code=400, detail="Numéro déjà utilisé")
+    
+    total_admins = db.query(Admin).count()
+    if total_admins >= 6:
+        raise HTTPException(status_code=403, detail="⚠️ Limite de 6 administrateurs atteinte")
+    
+    admin = crud.create_admin(db, signup.name, signup.phone, signup.password)
+    return {"message": f"✅ Compte créé: {admin.name}", "phone": admin.phone}
+
+@app.get("/admin/me")
+async def get_admin_info(current_admin: str = Depends(get_current_admin), db: Session = Depends(get_db)):
+    admin = crud.get_admin_by_phone(db, current_admin)
+    return {"name": admin.name, "phone": admin.phone}
+
+@app.get("/admin/pending")
+async def get_pending_requests(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
+    pending = crud.get_pending_requests(db)
+    return [{"device_id": p.device_id, "phone": p.phone_number, "key": p.activation_key, "months": p.months, "created": p.created.isoformat()} for p in pending]
+
+# ✅ VOS NOUVEAUX ENDPOINTS
 @app.post("/admin/validate/{device_id}")
 async def validate_subscription_endpoint(device_id: str, current_admin: str = Depends(get_current_admin), db: Session = Depends(get_db)):
     print(f"🔧 Admin {current_admin} valide: {device_id}")
@@ -133,20 +190,41 @@ async def get_validation_history(db: Session = Depends(get_db), current_admin: s
         "validated_at": log.validated_at.isoformat()
     } for log in logs]
 
-# ✅ STATIC + WEBSOCKET (votre code existant)
+@app.post("/admin/clear")
+async def clear_all_pending(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
+    crud.clear_all_pending(db)
+    return {"message": "Toutes les demandes supprimées"}
+
+# STATIC + WEBSOCKET
 admin_path = os.path.join(os.path.dirname(__file__), "../admin_panel")
 app.mount("/static", StaticFiles(directory=admin_path), name="static")
-@app.get("/") async def root(): return FileResponse(os.path.join(admin_path, "login.html"))
+
+@app.get("/")
+async def root():
+    return FileResponse(os.path.join(admin_path, "login.html"))
+
+@app.get("/dashboard.html")
+async def dashboard():
+    return FileResponse(os.path.join(admin_path, "dashboard.html"))
 
 @app.websocket("/ws/admin")
 async def websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
-    if not token or jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]).get("phone") is None:
+    if not token: 
+        await websocket.close(code=1008)
+        return
+    try:
+        if jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM]).get("phone") is None:
+            await websocket.close(code=1008)
+            return
+    except jwt.PyJWTError:
         await websocket.close(code=1008)
         return
     await manager.connect(websocket)
-    try: while True: await websocket.receive_text()
-    except WebSocketDisconnect: manager.disconnect(websocket)
+    try:
+        while True: await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 if __name__ == "__main__":
     import uvicorn
