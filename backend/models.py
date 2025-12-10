@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from backend.database import Base, engine
 
 # tes modèles ici…
@@ -46,6 +47,28 @@ class ValidationLog(Base):
     admin_id = Column(Integer, ForeignKey('admins.id'))
     admin_name = Column(String)
     validated_at = Column(DateTime, server_default=func.now())
+
+class Client(Base):
+    __tablename__ = "clients"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    phone = Column(String, index=True)
+    device_id = Column(String, ForeignKey("subscriptions.device_id"), unique=True)
+    
+    subscriptions = relationship("Subscription", back_populates="client")
+    validations = relationship("ValidationLog", back_populates="client")
+
+class ValidationLog(Base):
+    __tablename__ = "validation_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    admin_name = Column(String)
+    status = Column(String)  # "validated"
+    months = Column(Integer)
+    expires_at = Column(DateTime)
+    created_at = Column(DateTime, default=func.now())
+    
+    client = relationship("Client", back_populates="validations")
 
 # ✅ AJOUTEZ à la fin models.py :
 def create_tables():
