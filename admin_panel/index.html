@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
 </head>
 <body>
-    <!-- ✅ HEADER ADMIN SÉCURISÉ -->
+    <!-- HEADER (IDENTIQUE) -->
     <div id="adminHeader" class="admin-header">
         <div class="header-content">
             <div class="header-left">
@@ -18,48 +18,56 @@
             <div class="header-right">
                 <span id="adminInfo">👑 Chargement...</span>
                 <span class="status" id="connectionStatus">🔴 Déconnecté</span>
-                <span class="status" id="connectionStatus2">🔴 WebSocket</span> <!-- ✅ AJOUT -->
+                <span class="status" id="connectionStatus2">🔴 WebSocket</span>
                 <button class="btn-logout" onclick="logout()">🚪 Déconnexion</button>
             </div>
         </div>
     </div>
 
     <div class="container">
+        <!-- ✅ STATS + CLIENTS -->
         <header>
             <div class="stats">
                 <div class="stat-card">
                     <h2 id="pendingCount">0</h2>
-                    <span>📋 En attente</span> <!-- ✅ Émojis restaurés -->
+                    <span>📋 En attente</span>
                 </div>
                 <div class="stat-card">
                     <h2 id="totalCount">0</h2>
                     <span>📊 Total demandes</span>
                 </div>
+                <!-- ✅ NOUVEAU : Stats Clients -->
+                <div class="stat-card">
+                    <h2 id="clientsCount">0</h2>
+                    <span>👥 Clients</span>
+                </div>
             </div>
         </header>
         
-        <!-- ✅ ONGLETS (requis par script.js) -->
+        <!-- ✅ ONGLETS COMPLETS -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="showTab('pending', event)">📋 En attente</button>
-            <button class="tab-btn" onclick="showTab('history', event)">📈 Historique</button>
+            <button class="tab-btn active" data-tab="pending" onclick="showTab('pending', event)">📋 En attente</button>
+            <button class="tab-btn" data-tab="history" onclick="showTab('history', event)">📈 Historique</button>
+            <!-- ✅ NOUVEAU : Onglet Profils -->
+            <button class="tab-btn" data-tab="clients" onclick="showTab('clients', event)">👥 Profils Clients</button>
         </div>
         
-        <!-- ✅ CONTROLES (ID requis) -->
-        <div class="controls" id="pendingControls"> <!-- ✅ ID ajouté -->
+        <!-- CONTROLES (IDENTIQUE) -->
+        <div class="controls" id="pendingControls">
             <button class="btn refresh" onclick="loadPending()">🔄 Actualiser</button>
-            <button class="btn clear" onclick="clearAllPending()">🗑️ Vider tout</button> <!-- ✅ Texte corrigé -->
+            <button class="btn clear" onclick="clearAllPending()">🗑️ Vider tout</button>
         </div>
         
-        <!-- ✅ TABLEAU EN ATTENTE -->
-        <div id="pendingTab" class="table-container"> <!-- ✅ ID ajouté -->
+        <!-- ✅ TABLEAU EN ATTENTE (IDENTIQUE) -->
+        <div id="pendingTab" class="table-container active">
             <table id="pendingTable">
                 <thead>
                     <tr>
-                        <th>ID court</th> <!-- ✅ Restauré -->
+                        <th>ID court</th>
                         <th>Device ID</th>
-                        <th>📱 Téléphone</th> <!-- ✅ Émoji -->
+                        <th>📱 Téléphone</th>
                         <th>📅 Mois</th>
-                        <th>🔑 Clé</th> <!-- ✅ Simplifié -->
+                        <th>🔑 Clé</th>
                         <th>🕒 Date</th>
                         <th>✅ Action</th>
                     </tr>
@@ -68,8 +76,8 @@
             </table>
         </div>
         
-        <!-- ✅ TABLEAU HISTORIQUE (requis par script.js) -->
-        <div id="historyTab" class="table-container" style="display: none;"> <!-- ✅ AJOUT COMPLET -->
+        <!-- ✅ TABLEAU HISTORIQUE (IDENTIQUE) -->
+        <div id="historyTab" class="table-container">
             <table id="historyTable">
                 <thead>
                     <tr>
@@ -83,6 +91,22 @@
                 </thead>
                 <tbody></tbody>
             </table>
+        </div>
+        
+        <!-- ✅ NOUVEAU : ONGLETTES PROFILS CLIENTS -->
+        <div id="clientsTab" class="table-container">
+            <!-- Liste clients en grille -->
+            <div class="clients-grid" id="clientsList">
+                <p>Chargement des clients...</p>
+            </div>
+            
+            <!-- Détail client sélectionné -->
+            <div id="clientDetail" style="display: none; margin-top: 20px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h3 id="clientTitle">Profil Client</h3>
+                    <div id="clientHistory"></div>
+                </div>
+            </div>
         </div>
     </div>
 
