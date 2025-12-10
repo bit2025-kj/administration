@@ -173,28 +173,32 @@ async def get_validation_history(db: Session = Depends(get_db), current_admin: s
     ]
 
 @app.post("/admin/validate/{device_id}")
-async def validate_subscription(device_id: str, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
-    subscription = crud.get_pending_by_device(db, device_id)
-    if not subscription:
-        raise HTTPException(status_code=404, detail="Demande non trouvée")
-    
-    # 1. Valide subscription
-    subscription.status = "validated"
-    subscription.expires_at = datetime.now(timezone.utc) + timedelta(days=30 * subscription.months)
-    
-    # 2. Récupère admin
-    admin = crud.get_admin_by_phone(db, current_admin)
-    
-    # 3. LOG validation
-    crud.log_validation(
-        db, device_id, subscription.phone_number, subscription.months,
-        subscription.activation_key, admin.id, admin.name
-    )
-    
-    db.commit()
-    print(f"✅ VALIDÉ par {admin.name}: {device_id}")
-    await manager.broadcast(json.dumps({"type": "validated", "device_id": device_id}))
-    return {"message": "Abonnement validé et LOGGÉ !"}
+async def validate_subscription(db: Session, device_id: str, admin_name: str):
+    sub = get_subscription_by_device(db, device_id)
+    if sub and sub.status == "pending":
+        # Créer client si pas existant
+        client = db.query(Client).filter(Client.device_id == device_id).first()
+        if not client:
+            client = Client(device_id=device_id, phone=sub.phone_number)
+            db.add(client)
+            db.commit()
+        
+        sub.status = "validated"
+        sub.expires_at = func.now() + timedelta(days=30 * sub.months)
+        db.commit()
+        
+        # Logger validation
+        log = ValidationLog(
+            client_id=client.id,
+            admin_name=admin_name,
+            status="validated",
+            months=sub.months,
+            expires_at=sub.expires_at
+        )
+        db.add(log)
+        db.commit()
+        return True
+
 
 @app.post("/admin/clear")
 async def clear_all_pending(db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
@@ -213,6 +217,12 @@ async def root():
 @app.get("/dashboard.html")
 async def dashboard():
     return FileResponse(os.path.join(admin_path, "dashboard.html"))
+
+
+@app.get("/admin/client/{client_id}/history")
+async def get_client_history(client_id: int, db: Session = Depends(get_db)):
+    validations = get_client_validations(db, client_id)
+    return {"validations": [v.__dict__ for v in validations]}
 
 # ✅ WEBSOCKET UNIQUE (AVEC TOKEN VÉRIFICATION)
 @app.websocket("/ws/admin")
