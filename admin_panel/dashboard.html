@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
 </head>
 <body>
-    <!-- HEADER ADMIN SÉCURISÉ -->
+    <!-- HEADER (IDENTIQUE) -->
     <div id="adminHeader" class="admin-header">
         <div class="header-content">
             <div class="header-left">
@@ -25,7 +25,7 @@
     </div>
 
     <div class="container">
-        <!-- STATS -->
+        <!-- STATS (IDENTIQUE) -->
         <header>
             <div class="stats">
                 <div class="stat-card">
@@ -36,23 +36,29 @@
                     <h2 id="totalCount">0</h2>
                     <span>📊 Total demandes</span>
                 </div>
+                <div class="stat-card">
+                    <h2 id="clientsCount">0</h2>
+                    <span>👥 Clients</span>
+                </div>
             </div>
         </header>
         
-        <!-- ONGLETS -->
+        <!-- ✅ ONGLETS MODIFIÉS : + Profils Clients -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="showTab('pending')">📋 En attente</button>
-            <button class="tab-btn" onclick="showTab('history')">📈 Historique</button>
+            <button class="tab-btn active" data-tab="pending" onclick="showTab('pending')">📋 En attente</button>
+            <button class="tab-btn" data-tab="history" onclick="showTab('history')">📈 Historique</button>
+            <button class="tab-btn" data-tab="clients" onclick="showTab('clients')">👥 Profils Clients</button>
         </div>
         
-        <!-- CONTROLES (seulement onglet pending) -->
+        <!-- CONTROLES (IDENTIQUE) -->
         <div class="controls" id="pendingControls">
             <button class="btn refresh" onclick="loadPending()">🔄 Actualiser</button>
             <button class="btn clear" onclick="clearAllPending()">🗑️ Vider tout</button>
         </div>
         
-        <!-- TABLEAU EN ATTENTE -->
-        <div id="pendingTab" class="table-container">
+        <!-- ✅ ONGLETS CONTENU -->
+        <!-- 1. EN ATTENTE (IDENTIQUE) -->
+        <div id="pendingTab" class="table-container active">
             <table id="pendingTable">
                 <thead>
                     <tr>
@@ -69,8 +75,8 @@
             </table>
         </div>
         
-        <!-- TABLEAU HISTORIQUE -->
-        <div id="historyTab" class="table-container" style="display: none;">
+        <!-- 2. HISTORIQUE (IDENTIQUE) -->
+        <div id="historyTab" class="table-container">
             <table id="historyTable">
                 <thead>
                     <tr>
@@ -84,6 +90,18 @@
                 </thead>
                 <tbody></tbody>
             </table>
+        </div>
+        
+        <!-- ✅ 3. NOUVEAU : PROFILS CLIENTS -->
+        <div id="clientsTab" class="table-container">
+            <!-- Liste clients -->
+            <div class="clients-grid" id="clientsList"></div>
+            
+            <!-- Détail client sélectionné -->
+            <div id="clientDetail" style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; display: none;">
+                <h3 id="clientTitle">Profil Client</h3>
+                <div id="clientHistory"></div>
+            </div>
         </div>
     </div>
 
