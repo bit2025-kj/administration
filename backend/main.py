@@ -79,9 +79,16 @@ class AdminSignup(BaseModel):     # ✅ MANQUANT
 @app.post("/request_subscription")
 async def create_subscription(request: SubscriptionRequest, db: Session = Depends(get_db)):
     existing = crud.get_subscription_by_device(db, request.device_id)
-    if existing and existing.status == "pending":
-        return {"activation_key": existing.activation_key, "status": "pending"}
-    
+
+    # S'il y a déjà un abonnement, on renvoie toujours la même clé + status
+    if existing:
+        return {
+            "activation_key": existing.activation_key,
+            "status": existing.status,
+            "expires_at": existing.expires_at.isoformat() if existing.expires_at else None,
+        }
+
+    # Sinon, on crée une nouvelle entrée
     sub = crud.create_subscription(db, request.device_id, request.phone_number, request.months)
     await manager.broadcast(json.dumps({
         "type": "new_request",
@@ -90,10 +97,10 @@ async def create_subscription(request: SubscriptionRequest, db: Session = Depend
         "phone": sub.phone_number,
         "key": sub.activation_key,
         "months": sub.months,
-        "timestamp": sub.created.isoformat()
+        "timestamp": sub.created.isoformat() if sub.created else None,
     }))
-    print(f"🆕 {request.client_name}: {request.device_id} | Clé: {sub.activation_key}")
-    return {"activation_key": sub.activation_key, "status": "pending"}
+    return {"activation_key": sub.activation_key, "status": sub.status}
+
 
 @app.post("/check_subscription")
 async def check_subscription(request: CheckSubscriptionRequest, db: Session = Depends(get_db)):
